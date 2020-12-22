@@ -90,7 +90,7 @@ class mosse():
             # visualize the tracking process...
             cv2.rectangle(current_frame_BGR, (int(self._center[0]-self.w/2),int(self._center[1]-self.h/2)), (int(self._center[0]+self.w/2),int(self._center[1]+self.h/2)), (255, 0, 0), 2)
             cv2.imshow('demo', current_frame_BGR)
-            cv2.waitKey(10)
+            cv2.waitKey(1)
             # print([self._center[0]-self.w/2,self._center[1]-self.h/2,self.w,self.h])
 
     def _preprocessing(self,img,eps=1e-5):
@@ -160,6 +160,6 @@ if __name__ == "__main__":
     init_gt=[228,118,140,174]
     img_path = 'datasets/surfer/'
 
-    tracker = mosse(img_path=img_path,chose_ROI=False)
-    tracker.init(bbox_init_gt=init_gt)
+    tracker = mosse(img_path=img_path)
+    tracker.init(bbox_init_gt=init_gt,chose_ROI=False)
     tracker.update()
