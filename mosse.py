@@ -26,8 +26,10 @@ class mosse:
         init_frame = cv2.cvtColor(init_img, cv2.COLOR_BGR2GRAY)
         init_frame = init_frame.astype(np.float32)
         # get the init ground truth.. [x, y, width, height]
-        init_gt = cv2.selectROI('demo', init_img, False, False)
+        # init_gt = cv2.selectROI('demo', init_img, False, False)
+        init_gt = [228,118,140,174]
         init_gt = np.array(init_gt).astype(np.int64)
+        
         # start to draw the gaussian response...
         response_map = self._get_gauss_response(init_frame, init_gt)
         # start to create the training set ...
@@ -35,6 +37,7 @@ class mosse:
         g = response_map[init_gt[1]:init_gt[1]+init_gt[3], init_gt[0]:init_gt[0]+init_gt[2]]
         fi = init_frame[init_gt[1]:init_gt[1]+init_gt[3], init_gt[0]:init_gt[0]+init_gt[2]]
         G = np.fft.fft2(g)
+
         # start to do the pre-training...
         Ai, Bi = self._pre_training(fi, G)
         # start the tracking...
@@ -80,7 +83,7 @@ class mosse:
             # visualize the tracking process...
             cv2.rectangle(current_frame, (pos[0], pos[1]), (pos[0]+pos[2], pos[1]+pos[3]), (255, 0, 0), 2)
             cv2.imshow('demo', current_frame)
-            cv2.waitKey(100)
+            cv2.waitKey(10)
             # if record... save the frames..
             if self.args.record:
                 frame_path = 'record_frames/' + self.img_path.split('/')[1] + '/'
