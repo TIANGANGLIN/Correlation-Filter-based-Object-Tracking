@@ -1,9 +1,42 @@
 import numpy as np
-import cv2
+import cv2,os
 
-# used for linear mapping...
-def linear_mapping(img):
-    return (img - img.min()) / (img.max() - img.min())
+
+# it will extract the image list 
+def _get_img_lists(img_path):
+    frame_list = []
+    for frame in os.listdir(img_path):
+        if os.path.splitext(frame)[1] == '.jpg':
+            frame_list.append(os.path.join(img_path, frame)) 
+    return frame_list
+
+def _linear_mapping(img):
+        return (img - img.min()) / (img.max() - img.min())
+
+def _window_func_2d(width,height):
+    win_col = np.hanning(width)
+    win_row = np.hanning(height)
+    mask_col, mask_row = np.meshgrid(win_col, win_row)
+    return mask_col * mask_row
+
+def _get_gauss_response(size,sigma):
+    w,h=size
+
+    # get the mesh grid
+    xs, ys = np.meshgrid(np.arange(w), np.arange(h))
+
+    # get the center of the object
+    center_x, center_y = w / 2, h / 2
+
+    # cal the distance...
+    dist = ((xs - center_x) ** 2 + (ys - center_y) ** 2) / (2*sigma**2)
+
+    # get the response map
+    response = np.exp(-dist)
+
+    # normalize
+    response = _linear_mapping(response)
+    return response
 
 # pre-processing the image...
 def pre_process(img):

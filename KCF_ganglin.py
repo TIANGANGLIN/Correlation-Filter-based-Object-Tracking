@@ -1,37 +1,34 @@
 """
-Python re-implementation of "Visual Object Tracking using Adaptive Correlation Filters"
-@inproceedings{Bolme2010Visual,
-  title={Visual object tracking using adaptive correlation filters},
-  author={Bolme, David S. and Beveridge, J. Ross and Draper, Bruce A. and Lui, Yui Man},
-  booktitle={Computer Vision & Pattern Recognition},
-  year={2010},
-}
+Python implementation of "High-Speed Tracking with Kernelized Correlation Filters"
+
 """
 import numpy as np
 import cv2,os
-from utils import _get_img_lists,_linear_mapping,_window_func_2d,_get_gauss_response
 
-class mosse():
-    def __init__(self,interp_factor=0.125,sigma=2.,img_path = 'datasets/surfer/'
-                ,bbox_init_gt=[228,118,140,174],chose_ROI=False,num_pretrain=128):
-        # super(MOSSE).__init__()
+class KCF():
+    def __init__(self,padding = 1.5, features = 'gray',img_path = 'datasets/surfer/'):
+        self.padding=padding
+        self.lambda_ = 1e-4
+        self.features=features
         self.interp_factor=interp_factor
         self.sigma=sigma
         self.frame_list = _get_img_lists(img_path)
         self.frame_list.sort()
         self.first_frame = cv2.imread(self.frame_list[0])
-        self.bbox_init_gt=bbox_init_gt
-        self.chose_ROI=chose_ROI
-        self.num_pretrain=num_pretrain
 
-    def init(self):
-        if self.chose_ROI:
+    def init(self,bbox_init_gt=[228,118,140,174],chose_ROI=False,num_pretrain=128):
+        # GET THE FIRST GROUDTRUTH
+        if chose_ROI:
             bbox = cv2.selectROI('demo', self.first_frame, False, False)
         else:
-            bbox = self.bbox_init_gt
+            bbox = bbox_init_gt
+        
+        # BGR2GRAY
         if len(self.first_frame.shape)!=2:
             assert self.first_frame.shape[2]==3
             self.first_frame=cv2.cvtColor(self.first_frame,cv2.COLOR_BGR2GRAY)
+        
+        
         self.first_frame=self.first_frame.astype(np.float32)/255
         x,y,w,h=tuple(bbox)
         self._center=(x+w/2,y+h/2)
@@ -39,31 +36,16 @@ class mosse():
         w,h=int(round(w)),int(round(h))
         
         self._fi=cv2.getRectSubPix(self.first_frame,(w,h),self._center)
-        self._G=np.fft.fft2(_get_gauss_response((w,h),self.sigma))
+        self._G=np.fft.fft2(self._get_gauss_response((w,h),self.sigma))
 
         self._Ai=np.zeros_like(self._G)
         self._Bi=np.zeros_like(self._G)
-        for _ in range(self.num_pretrain):
+        for _ in range(num_pretrain):
             fi=self._rand_warp(self._fi)
             Fi=np.fft.fft2(self._preprocessing(fi))
             self._Ai+=self._G*np.conj(Fi)
             self._Bi+=Fi*np.conj(Fi)
 
-        # # pre train the filter on the first frame
-        # Fi=np.fft.fft2(self._preprocessing(fi))
-        # Ai = self._G * Fi
-        # Bi = np.fft.fft2(fi) * np.conjugate(np.fft.fft2(fi))
-
-        # self._Ai = self.interp_factor*Ai
-        # self._Bi = self.interp_factor*Bi
-
-        # # self._Ai=np.zeros_like(self._G)
-        # # self._Bi=np.zeros_like(self._G)
-        # for _ in range(num_pretrain):
-        #     fi=self._rand_warp(self._fi)
-        #     Fi = np.fft.fft2(fi)
-        #     self._Ai+=self._G*np.conj(Fi)
-        #     self._Bi+=Fi*np.conj(Fi)
 
     def update(self,vis=False):
         for idx in range(len(self.frame_list)):
@@ -101,11 +83,35 @@ class mosse():
     def _preprocessing(self,img,eps=1e-5):
         img=np.log(img+1)
         img=(img-np.mean(img))/(np.std(img)+eps)
-        cos_window = _window_func_2d(int(round(self.w)),int(round(self.h)))
+        cos_window = self._window_func_2d(int(round(self.w)),int(round(self.h)))
         return cos_window*img
 
+    # def _window_func_2d(self,height, width):
+    def _window_func_2d(self,width,height):
+        win_col = np.hanning(width)
+        win_row = np.hanning(height)
+        mask_col, mask_row = np.meshgrid(win_col, win_row)
+        return mask_col * mask_row
 
+    def _get_gauss_response(self,size,sigma):
+        # self._G=np.fft.fft2(gaussian2d_labels((w,h),self.sigma))
+        w,h=size
 
+        # get the mesh grid
+        xs, ys = np.meshgrid(np.arange(w), np.arange(h))
+
+        # get the center of the object
+        center_x, center_y = w / 2, h / 2
+
+        # cal the distance...
+        dist = ((xs - center_x) ** 2 + (ys - center_y) ** 2) / (2*sigma**2)
+
+        # get the response map
+        response = np.exp(-dist)
+
+        # normalize
+        response = _linear_mapping(response)
+        return response
 
     def _rand_warp(self,img):
         h, w = img.shape[:2]
@@ -120,12 +126,27 @@ class mosse():
         warped = cv2.warpAffine(img, W, (w, h), cv2.BORDER_REFLECT)
         return warped
 
+##############################################
+# utils 
+##############################################
+# it will extract the image list 
+def _get_img_lists(img_path):
+    frame_list = []
+    for frame in os.listdir(img_path):
+        if os.path.splitext(frame)[1] == '.jpg':
+            frame_list.append(os.path.join(img_path, frame)) 
+    return frame_list
+
+def _linear_mapping(img):
+        return (img - img.min()) / (img.max() - img.min())
+
+
 
 if __name__ == "__main__":
 
     init_gt=[228,118,140,174]
     img_path = 'datasets/surfer/'
 
-    tracker = mosse(img_path=img_path,bbox_init_gt=init_gt,chose_ROI=False)
-    tracker.init()
+    tracker = KCF(img_path=img_path)
+    tracker.init(bbox_init_gt=init_gt,chose_ROI=False)
     tracker.update()
